@@ -1,17 +1,16 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>高知市 散歩ルート提案（Googleマップ）</title>
+  <meta charset="UTF-8" />
+  <title>高知お散歩ルートメーカー</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: sans-serif;
       margin: 0;
-      padding: 0;
     }
     #controls {
       padding: 10px;
-      background: #f4f4f4;
+      background: #f0f8f5;
     }
     #map {
       width: 100%;
@@ -19,136 +18,104 @@
     }
     select, button {
       margin-right: 10px;
+      padding: 6px;
     }
   </style>
 </head>
 <body>
 
 <div id="controls">
-  <label>気分:</label>
-  <select id="mood">
-    <option value="">選択</option>
-    <option value="scenery">風景</option>
-    <option value="cafe">カフェ</option>
-    <option value="history">歴史</option>
-  </select>
+  <label>
+    気分：
+    <select id="mood">
+      <option value="relax">のんびり</option>
+      <option value="nature">自然</option>
+      <option value="city">街歩き</option>
+    </select>
+  </label>
 
-  <label>距離:</label>
-  <select id="distance">
-    <option value="">選択</option>
-    <option value="short">～3km</option>
-    <option value="medium">3～6km</option>
-    <option value="long">6km～</option>
-  </select>
+  <label>
+    距離：
+    <select id="distance">
+      <option value="1">1km</option>
+      <option value="3">3km</option>
+      <option value="5">5km</option>
+    </select>
+  </label>
 
-  <button onclick="showRoute()">ルート表示</button>
+  <button onclick="generateRoute()">ルートを決める</button>
 </div>
 
 <div id="map"></div>
 
 <script>
+const GOOGLE_MAPS_API_KEY = "YOUR_API_KEY";
+
 let map;
-let polyline;
-let markers = [];
+let directionsService;
+let directionsRenderer;
 
-// 高知市の散歩ルート（簡易ルート：始点〜終点）
-const routes = [
-  {
-    name: "高知城 歴史散策",
-    mood: "history",
-    distance: "short",
-    path: [
-      { lat: 33.5597, lng: 133.5311 }, // 高知城
-      { lat: 33.5585, lng: 133.5335 }  // 高知城歴史博物館
-    ]
-  },
-  {
-    name: "はりまや橋 カフェ巡り",
-    mood: "cafe",
-    distance: "medium",
-    path: [
-      { lat: 33.5603, lng: 133.5433 }, // はりまや橋
-      { lat: 33.5582, lng: 133.5400 }  // 追手筋
-    ]
-  },
-  {
-    name: "鏡川リバーサイド",
-    mood: "scenery",
-    distance: "medium",
-    path: [
-      { lat: 33.5572, lng: 133.5266 }, // 鏡川
-      { lat: 33.5535, lng: 133.5200 }
-    ]
-  },
-  {
-    name: "桂浜 海辺散歩",
-    mood: "scenery",
-    distance: "long",
-    path: [
-      { lat: 33.4969, lng: 133.5716 }, // 桂浜
-      { lat: 33.4945, lng: 133.5758 }
-    ]
-  }
-];
+// 高知県内の候補スポット
+const spots = {
+  relax: [
+    { name: "高知城", lat: 33.5597, lng: 133.5311 },
+    { name: "鏡川", lat: 33.5535, lng: 133.5207 }
+  ],
+  nature: [
+    { name: "桂浜", lat: 33.4968, lng: 133.5714 },
+    { name: "四万十川", lat: 32.9907, lng: 132.9335 }
+  ],
+  city: [
+    { name: "はりまや橋", lat: 33.5586, lng: 133.5415 },
+    { name: "高知駅", lat: 33.5662, lng: 133.5431 }
+  ]
+};
 
-// マップ初期化
 function initMap() {
   map = new google.maps.Map(document.getElementById("map"), {
     center: { lat: 33.5597, lng: 133.5311 },
     zoom: 13
   });
+
+  directionsService = new google.maps.DirectionsService();
+  directionsRenderer = new google.maps.DirectionsRenderer();
+  directionsRenderer.setMap(map);
 }
 
-// ルート表示
-function showRoute() {
+function generateRoute() {
   const mood = document.getElementById("mood").value;
-  const distance = document.getElementById("distance").value;
+  const distanceKm = Number(document.getElementById("distance").value);
 
-  const route = routes.find(r =>
-    (mood === "" || r.mood === mood) &&
-    (distance === "" || r.distance === distance)
+  const candidates = spots[mood];
+  const start = candidates[Math.floor(Math.random() * candidates.length)];
+
+  // ランダムに少しずらしたゴールを作る
+  const delta = distanceKm * 0.005;
+  const goal = {
+    lat: start.lat + (Math.random() - 0.5) * delta,
+    lng: start.lng + (Math.random() - 0.5) * delta
+  };
+
+  directionsService.route(
+    {
+      origin: start,
+      destination: goal,
+      travelMode: google.maps.TravelMode.WALKING
+    },
+    (result, status) => {
+      if (status === "OK") {
+        directionsRenderer.setDirections(result);
+      } else {
+        alert("ルートを生成できませんでした");
+      }
+    }
   );
-
-  if (!route) {
-    alert("条件に合うルートがありません");
-    return;
-  }
-
-  // 既存の表示をクリア
-  if (polyline) polyline.setMap(null);
-  markers.forEach(m => m.setMap(null));
-  markers = [];
-
-  // マーカー設置
-  route.path.forEach((pos, index) => {
-    const marker = new google.maps.Marker({
-      position: pos,
-      map: map,
-      label: index === 0 ? "S" : "G"
-    });
-    markers.push(marker);
-  });
-
-  // ルート線描画
-  polyline = new google.maps.Polyline({
-    path: route.path,
-    geodesic: true,
-    strokeColor: "#FF0000",
-    strokeOpacity: 1.0,
-    strokeWeight: 3
-  });
-  polyline.setMap(map);
-
-  map.setCenter(route.path[0]);
-  map.setZoom(14);
 }
 </script>
 
-<!-- Google Maps API -->
 <script async
-  src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap">
+  src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap">
 </script>
 
 </body>
 </html>
-
